@@ -1,0 +1,121 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.model_selection import train_test_split
+from sklearn import linear_model
+
+df = pd.read_csv('NYPD_Shooting_Incident.csv')
+#drop columns that we won't use in the analysis
+df.drop(columns=['INCIDENT_KEY', 'JURISDICTION_CODE', 'X_COORD_CD', 'Y_COORD_CD','New Georeferenced Column'],inplace=True)
+
+#find and drop nan (because three PERP col missed same cells of nan, so we select on col to drop nan values.
+df_dropna = df.dropna(subset=['PERP_SEX'])
+
+#after drop nan in sex col, we have 595 col left fill nan value in col LOCATION_DESC with value:
+#'MULTI DWELL - PUBLIC HOUS'
+df_cleaned = df_dropna.fillna(value='MULTI DWELL - PUBLIC HOUS')
+
+### Purpose:
+* We would like to know the victims' races and the area the victims have been shot. *
+* The race of the majority of the victims was Black, and most of the shooting incidents have happened near the Brooklyn area. *
+
+from IPython.core.interactiveshell import InteractiveShell
+InteractiveShell.ast_node_interactivity = "all"
+import warnings
+warnings.filterwarnings("ignore")
+import matplotlib.pyplot as plt
+import plotly.express as px
+
+#since we want to plot all victims instead of only plot the incidetns that perpetrator's info are not missing, we'll use original df here.
+df2=df.copy()
+df2=df2.drop(columns=['OCCUR_DATE','OCCUR_TIME','PRECINCT','LOCATION_DESC','STATISTICAL_MURDER_FLAG','PERP_AGE_GROUP',\
+                 'PERP_SEX','PERP_RACE'])
+   
+------ visualization by using mapbox   
+px.set_mapbox_access_token ='pk.___TOKEN KEY____'
+fig = px.scatter_mapbox(data_frame=df2, 
+                        lat="Latitude", 
+                        lon="Longitude",
+                        color="VIC_RACE",
+                        hover_data=['VIC_SEX','VIC_AGE_GROUP'])
+
+fig.update_layout(mapbox_style="carto-positron",\
+                  title='Victims races of shooting incidents in NY',
+                  mapbox_zoom=9.2, mapbox_center = {"lat": 40.78, "lon": -73.97},
+                    #use central park as center = {"lat": 40.78, "lon": -73.97}
+                  margin={"r":0,"t":50,"l":0,"b":0})
+
+------ visualization by using seaborn
+plt.figure(figsize=(12,7)) # this creates a figure 12 inch wide, 7 inch high
+sns.countplot(y='VIC_RACE', hue='BORO', order=df.VIC_RACE.unique(), data=df2).set_title('Victims races and shooting incidents area')
+plt.legend(bbox_to_anchor=(1.03, 1), loc=0, borderaxespad=0.)
+
+
+* information of different races' victims *
+df3=df.copy()
+df3=df3.drop(columns=['OCCUR_DATE','OCCUR_TIME','PRECINCT','LOCATION_DESC','STATISTICAL_MURDER_FLAG','PERP_AGE_GROUP',\
+                 'PERP_SEX','PERP_RACE','Latitude','Longitude'])
+df3['18-24y'] = df3.VIC_AGE_GROUP.apply(lambda x: 1 if x=='18-24' else 0)
+df3['25-44y'] = df3.VIC_AGE_GROUP.apply(lambda x: 1 if x=='25-44' else 0)
+df3['45-64y'] = df3.VIC_AGE_GROUP.apply(lambda x: 1 if x=='45-64' else 0)
+df3['Above 65y'] = df3.VIC_AGE_GROUP.apply(lambda x: 1 if x=='65+' else 0)
+df3['Less than 18y'] = df3.VIC_AGE_GROUP.apply(lambda x: 1 if x=='<18' else 0)
+df3['Age Unknown'] = df3.VIC_AGE_GROUP.apply(lambda x: 1 if x=='UNKNOWN' else 0)
+df3['Male'] = df3.VIC_SEX.apply(lambda x: 1 if x=='M' else 0)
+df3['Female'] = df3.VIC_SEX.apply(lambda x: 1 if x=='F' else 0)
+df3['Sex Unknown'] = df3.VIC_SEX.apply(lambda x: 1 if x=='U' else 0)
+df3['Brnox'] = df3.BORO.apply(lambda x: 1 if x=='BRONX' else 0)
+df3['Manhattan'] = df3.BORO.apply(lambda x: 1 if x=='MANHATTAN' else 0)
+df3['Brooklyn'] = df3.BORO.apply(lambda x: 1 if x=='BROOKLYN' else 0)
+df3['Queens'] = df3.BORO.apply(lambda x: 1 if x=='QUEENS' else 0)
+df3['Staten Island'] = df3.BORO.apply(lambda x: 1 if x=='STATEN ISLAND' else 0)
+vic = df3
+VIC_PROFILE = vic.groupby('VIC_RACE')[['18-24y','25-44y','45-64y','Above 65y','Less than 18y',\
+                                       'Age Unknown','Male','Female','Sex Unknown','Brnox','Manhattan',\
+                                      'Brooklyn','Queens','Staten Island']].sum()
+total_1824 = VIC_PROFILE['18-24y'].sum()
+total_2544 = VIC_PROFILE['25-44y'].sum()
+total_4564 = VIC_PROFILE['45-64y'].sum()
+total_65 = VIC_PROFILE['Above 65y'].sum()
+total_18 = VIC_PROFILE['Less than 18y'].sum()
+total_ageunknown = VIC_PROFILE['Age Unknown'].sum()
+total_male = VIC_PROFILE['Male'].sum()
+total_female = VIC_PROFILE['Female'].sum()
+total_sexunknown = VIC_PROFILE['Sex Unknown'].sum()
+total_brnox = VIC_PROFILE['Brnox'].sum()
+total_manhattan = VIC_PROFILE['Manhattan'].sum()
+total_brooklyn = VIC_PROFILE['Brooklyn'].sum()
+total_queens = VIC_PROFILE['Queens'].sum()
+total_staten = VIC_PROFILE['Staten Island'].sum()
+total_list = [total_1824, total_2544, total_4564, total_65, total_18, total_ageunknown, total_male, total_female,\
+             total_sexunknown,total_brnox,total_manhattan,total_brooklyn,total_queens,total_staten]
+VIC_PROFILE.loc[-1] = total_list
+
+black_count = len(vic[vic.VIC_RACE == 'BLACK'])
+whitehis_count = len(vic[vic.VIC_RACE == 'WHITE HISPANIC'])
+unknown_count = len(vic[vic.VIC_RACE == 'UNKNOWN'])
+blackhis_count = len(vic[vic.VIC_RACE == 'BLACK HISPANIC'])
+white_count = len(vic[vic.VIC_RACE == 'WHITE'])
+asianapcific_count = len(vic[vic.VIC_RACE == 'ASIAN / PACIFIC ISLANDER'])
+
+asianpacific_percent = round(asianapcific_count / len(vic)*100, 2)
+black_percent = round(black_count / len(vic)*100,2)
+blackhis_percent = round(blackhis_count / len(vic)*100, 2)
+unknown_percent = round(unknown_count / len(vic)*100, 2)
+white_percent = round(white_count / len(vic)*100, 2)
+whitehis_percent = round(whitehis_count / len(vic)*100, 2)
+total = round(len(vic)/len(vic)*100, 2)
+percent_list = [asianpacific_percent,black_percent,blackhis_percent,unknown_percent,white_percent,whitehis_percent,total]
+
+VIC_PROFILE.insert(14,'Victims race(%)',percent_list)
+VIC_PROFILE.rename(index={-1:'Total'}, inplace=True)
+VIC_PROFILE
+
+### Conclusion:
+1. The majority of Asians and Pacific islander victims were around 25 to 44 years old males.
+2. Most of the Black victims were around 25 to 44 years old males.
+3. Black Hispanic males between 25 to 44 years old were shooted the most.
+4. White victims were almost males and mostly shot around 18 to 44 years old.
+5. Most of the White Hispanic victims were 25 to 44 years old men.
+6. Black people were almost 72% of the victims, being the highest percentage of races.
